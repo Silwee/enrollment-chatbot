@@ -8,8 +8,6 @@ from docx import Document as DocxDocument
 from pptx import Presentation as PptxPresentation
 from openpyxl import load_workbook
 
-API_KEY = "AIzaSyB2pD4hHe1kJp20Mtw3468U9CQAb3X8mts"
-
 SUMMARIZE_PROMPT = (
     "Tóm tắt đoạn văn bản hoặc file sau dưới dạng danh sách các nội dung quan trọng của văn bản. "
     "Không cần phải giữ lại tất cả các chi tiết, nhưng đừng bỏ qua bất kỳ thông tin quan trọng nào. "
@@ -124,7 +122,7 @@ def main():
 
     # Gemini client
     try:
-        client = genai.Client(api_key=API_KEY)
+        client = genai.Client()
     except Exception:
         st.error("Could not initialise Gemini client. Check the API key.")
         st.stop()
