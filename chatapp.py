@@ -115,7 +115,7 @@ def summarize_file(client: genai.Client, file_name: str, file_bytes: bytes, mime
 # Main Application
 # ---------------------------------------------------------------------------
 def main():
-    st.set_page_config(page_title="Chatbot AI hỗ trợ tuyển sinh", page_icon="🎓", layout="wide")
+    st.set_page_config(page_title="Chatbot AI hỗ trợ tuyển sinh trường PTDT Nội Trú THCS&THPT Mèo Vạc", page_icon="🎓", layout="wide")
 
     # Shared summaries store (persists for the lifetime of the server process)
     summaries: dict = get_summaries_store()
@@ -124,7 +124,7 @@ def main():
     try:
         client = genai.Client()
     except Exception:
-        st.error("Could not initialise Gemini client. Check the API key.")
+        st.error("Không thể nhận diện API Key. Vui lòng thông báo cho quản trị viên.")
         st.stop()
 
     # Per-tab session state
@@ -217,15 +217,18 @@ def main():
     # -----------------------------------------------------------------------
     # Main chat area
     # -----------------------------------------------------------------------
-    st.title("🎓 Chatbot hỗ trợ tuyển sinh")
+    st.title("🎓 Hỗ trợ tuyển sinh trường PTDT Nội Trú THCS&THPT Mèo Vạc")
 
     # Render chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+    if not summaries:
+        st.warning("⚠️ Chưa có tài liệu nào. Vui lòng thông báo cho quản trị viên.")
+
     # New user input
-    if prompt := st.chat_input("VD: Thi lớp 10 vào ngày nào?"):
+    if prompt := st.chat_input("VD: Thi lớp 10 vào ngày nào?", disabled=not summaries):
 
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
