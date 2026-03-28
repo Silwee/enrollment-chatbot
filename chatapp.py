@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import uuid
 import io
@@ -7,6 +8,7 @@ from google.genai.types import Part
 from docx import Document as DocxDocument
 from pptx import Presentation as PptxPresentation
 from openpyxl import load_workbook
+from pymongo.mongo_client import MongoClient
 
 SUMMARIZE_PROMPT = (
     "Tóm tắt đoạn văn bản hoặc file sau dưới dạng danh sách các nội dung quan trọng của văn bản. "
@@ -24,12 +26,66 @@ SYSTEM_INSTRUCTION = (
 
 
 # ---------------------------------------------------------------------------
-# Shared in-memory store — one instance across ALL Streamlit sessions
+# MongoDB Atlas connection — one client per server process
 # ---------------------------------------------------------------------------
 @st.cache_resource
-def get_summaries_store() -> dict:
-    """Returns the shared dict: { filename: summary_text }"""
-    return {}
+def get_mongo_collection():
+    """Return the MongoDB collection used to persist summaries."""
+    db_password = os.environ.get("DB_PASSWORD", "")
+    uri = f"mongodb+srv://admin:{db_password}@enrollmentmeovac.1m1lqru.mongodb.net/?appName=EnrollmentMeovac"
+    mongo_client = MongoClient(uri)
+    db = mongo_client["enrollment"]
+    return db["summaries"]
+
+
+# ---------------------------------------------------------------------------
+# Dict-like proxy that reads/writes from MongoDB
+# ---------------------------------------------------------------------------
+class MongoSummariesStore:
+    """Thin dict-like wrapper around a MongoDB collection."""
+
+    def __init__(self, collection):
+        self._col = collection
+
+    # --- dict-like read interface ---
+    def __contains__(self, key: str) -> bool:
+        return self._col.count_documents({"_id": key}, limit=1) > 0
+
+    def __getitem__(self, key: str) -> str:
+        doc = self._col.find_one({"_id": key})
+        if doc is None:
+            raise KeyError(key)
+        return doc["summary"]
+
+    def __setitem__(self, key: str, value: str):
+        self._col.update_one({"_id": key}, {"$set": {"summary": value}}, upsert=True)
+
+    def __delitem__(self, key: str):
+        self._col.delete_one({"_id": key})
+
+    def __len__(self) -> int:
+        return self._col.count_documents({})
+
+    def __bool__(self) -> bool:
+        return self._col.count_documents({}, limit=1) > 0
+
+    def keys(self):
+        return [doc["_id"] for doc in self._col.find({}, {"_id": 1})]
+
+    def items(self):
+        return [(doc["_id"], doc["summary"]) for doc in self._col.find({})]
+
+    def get(self, key: str, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+@st.cache_resource
+def get_summaries_store() -> MongoSummariesStore:
+    """Returns the shared MongoDB-backed summaries store."""
+    return MongoSummariesStore(get_mongo_collection())
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +173,8 @@ def summarize_file(client: genai.Client, file_name: str, file_bytes: bytes, mime
 def main():
     st.set_page_config(page_title="Chatbot AI hỗ trợ tuyển sinh trường PTDT Nội Trú THCS&THPT Mèo Vạc", page_icon="🎓", layout="wide")
 
-    # Shared summaries store (persists for the lifetime of the server process)
-    summaries: dict = get_summaries_store()
+    # Shared summaries store (persists across all sessions, backed by MongoDB Atlas)
+    summaries: MongoSummariesStore = get_summaries_store()
 
     # Gemini client
     try:
@@ -269,6 +325,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
